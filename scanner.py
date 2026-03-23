@@ -17,6 +17,40 @@ def truncate(text: str, length: int = 100) -> str:
     return text if len(text) <= length else text[: length - 3] + "..."
 
 
+def extract_severity(vuln: dict) -> str:
+    # OSV often returns severity as a list like:
+    # "severity": [{"type": "CVSS_V3", "score": "7.5"}]
+    severity_list = vuln.get("severity", [])
+    if severity_list:
+        first = severity_list[0]
+        score = first.get("score")
+        sev_type = first.get("type")
+        if score and sev_type:
+            return f"{sev_type}:{score}"
+        if score:
+            return str(score)
+
+    # Fallbacks sometimes seen in vulnerability data
+    database_specific = vuln.get("database_specific", {})
+    if database_specific.get("severity"):
+        return str(database_specific["severity"])
+
+    ecosystem_specific = vuln.get("ecosystem_specific", {})
+    if ecosystem_specific.get("severity"):
+        return str(ecosystem_specific["severity"])
+
+    return "UNKNOWN"
+
+
+def format_publish_date(vuln: dict) -> str:
+    published = vuln.get("published")
+    if not published:
+        return "UNKNOWN"
+
+    # Example: 2023-08-10T18:15:00Z -> 2023-08-10
+    return published[:10]
+
+
 def check_package(package_name: str) -> dict:
     payload = {
         "package": {
@@ -85,13 +119,14 @@ def print_package_result(result: dict) -> None:
         return
 
     print(f"[!] Vulnerabilities found for {package_name}: {len(vulns)}")
-    print("    ID               | Summary")
-    print("    -----------------|--------------------------------------------------------------")
+    print("    ID               | Severity        | Publish Date")
+    print("    -----------------|-----------------|------------")
 
     for vuln in vulns:
         vuln_id = vuln.get("id", "UNKNOWN")
-        summary = truncate(vuln.get("summary", "No summary available"), 70)
-        print(f"    {vuln_id:<16} | {summary}")
+        severity = extract_severity(vuln)
+        publish_date = format_publish_date(vuln)
+        print(f"    {vuln_id:<16} | {severity:<15} | {publish_date}")
 
     print()
 
