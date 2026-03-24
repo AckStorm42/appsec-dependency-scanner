@@ -18,19 +18,21 @@ def truncate(text: str, length: int = 100) -> str:
 
 
 def extract_severity(vuln: dict) -> str:
-    # OSV often returns severity as a list like:
-    # "severity": [{"type": "CVSS_V3", "score": "7.5"}]
     severity_list = vuln.get("severity", [])
     if severity_list:
         first = severity_list[0]
         score = first.get("score")
         sev_type = first.get("type")
-        if score and sev_type:
-            return f"{sev_type}:{score}"
+
+        if score and score in {"LOW", "MODERATE", "HIGH", "CRITICAL"}:
+            return score
+
+        if sev_type:
+            return sev_type
+
         if score:
             return str(score)
 
-    # Fallbacks sometimes seen in vulnerability data
     database_specific = vuln.get("database_specific", {})
     if database_specific.get("severity"):
         return str(database_specific["severity"])
@@ -118,15 +120,40 @@ def print_package_result(result: dict) -> None:
         print()
         return
 
-    print(f"[!] Vulnerabilities found for {package_name}: {len(vulns)}")
-    print("    ID               | Severity        | Publish Date")
-    print("    -----------------|-----------------|------------")
-
+    rows = []
     for vuln in vulns:
         vuln_id = vuln.get("id", "UNKNOWN")
         severity = extract_severity(vuln)
         publish_date = format_publish_date(vuln)
-        print(f"    {vuln_id:<16} | {severity:<15} | {publish_date}")
+        rows.append((vuln_id, severity, publish_date))
+
+    headers = ("ID", "Severity", "Publish Date")
+
+    id_width = max(len(headers[0]), max(len(row[0]) for row in rows))
+    severity_width = max(len(headers[1]), max(len(row[1]) for row in rows))
+    date_width = max(len(headers[2]), max(len(row[2]) for row in rows))
+
+    print(f"[!] Vulnerabilities found for {package_name}: {len(vulns)}")
+    print(
+        "    "
+        f"{headers[0]:<{id_width}} | "
+        f"{headers[1]:<{severity_width}} | "
+        f"{headers[2]:<{date_width}}"
+    )
+    print(
+        "    "
+        f"{'-' * id_width}-+-"
+        f"{'-' * severity_width}-+-"
+        f"{'-' * date_width}"
+    )
+
+    for vuln_id, severity, publish_date in rows:
+        print(
+            "    "
+            f"{vuln_id:<{id_width}} | "
+            f"{severity:<{severity_width}} | "
+            f"{publish_date:<{date_width}}"
+        )
 
     print()
 
