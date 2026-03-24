@@ -349,7 +349,6 @@ def enrich_results(results: list[dict[str, Any]]) -> tuple[list[dict[str, Any]],
     unique_warnings = list(dict.fromkeys(warnings))
     return enriched_results, unique_warnings
 
-
 def print_package_result(result: dict[str, Any]) -> None:
     package_name = result["package"]
 
@@ -361,24 +360,76 @@ def print_package_result(result: dict[str, Any]) -> None:
 
     vulns = result.get("enriched_vulns", [])
 
+    seen = set()
+    deduped_vulns = []
+
+    for vuln in vulns:
+        key = vuln.get("cve_id") or vuln.get("osv_id") or vuln.get("id")
+        if key in seen:
+            continue
+    seen.add(key)
+    deduped_vulns.append(vuln)
+
+    vulns = deduped_vulns
+
     if not vulns:
         print(f"[OK] {package_name} has no known vulnerabilities")
         print()
         return
 
-    print(f"[!] Vulnerabilities found for {package_name}: {len(vulns)}")
-    print("    Package               | CVE                 | Severity   | CVSS | EPSS  | KEV | Publish Date")
-    print("    ----------------------|---------------------|------------|------|-------|-----|------------")
+    headers = ["Package", "CVE", "Severity", "CVSS", "EPSS", "KEV", "Publish Date"]
 
+    rows = []
     for vuln in vulns:
+        rows.append([
+            package_name,
+            vuln.get("cve_id", "N/A"),
+            vuln.get("severity", "UNKNOWN"),
+            str(vuln.get("cvss", "N/A")),
+            str(vuln.get("epss", "N/A")),
+            str(vuln.get("kev", "N/A")),
+            str(vuln.get("publish_date", "UNKNOWN")),
+        ])
+
+    col_widths = [
+        max(len(headers[i]), max(len(str(row[i])) for row in rows))
+        for i in range(len(headers))
+    ]
+
+    print(f"[!] Vulnerabilities found for {package_name}: {len(vulns)}")
+
+    print(
+        "    "
+        f"{headers[0]:<{col_widths[0]}} | "
+        f"{headers[1]:<{col_widths[1]}} | "
+        f"{headers[2]:<{col_widths[2]}} | "
+        f"{headers[3]:>{col_widths[3]}} | "
+        f"{headers[4]:>{col_widths[4]}} | "
+        f"{headers[5]:<{col_widths[5]}} | "
+        f"{headers[6]:<{col_widths[6]}}"
+    )
+
+    print(
+        "    "
+        f"{'-' * col_widths[0]}-+-"
+        f"{'-' * col_widths[1]}-+-"
+        f"{'-' * col_widths[2]}-+-"
+        f"{'-' * col_widths[3]}-+-"
+        f"{'-' * col_widths[4]}-+-"
+        f"{'-' * col_widths[5]}-+-"
+        f"{'-' * col_widths[6]}"
+    )
+
+    for row in rows:
         print(
-            f"    {package_name:<21} | "
-            f"{vuln['cve_id']:<15}     | "
-            f"{vuln['severity']:<10} | "
-            f"{vuln['cvss']:<4} | "
-            f"{vuln['epss']:<5} | "
-            f"{vuln['kev']:<3} | "
-            f"{vuln['publish_date']}"
+            "    "
+            f"{row[0]:<{col_widths[0]}} | "
+            f"{row[1]:<{col_widths[1]}} | "
+            f"{row[2]:<{col_widths[2]}} | "
+            f"{row[3]:>{col_widths[3]}} | "
+            f"{row[4]:>{col_widths[4]}} | "
+            f"{row[5]:<{col_widths[5]}} | "
+            f"{row[6]:<{col_widths[6]}}"
         )
 
     print()
@@ -480,3 +531,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
